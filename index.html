@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Penilaian Land Clearing</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Leaflet Draw -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #map { height: 100vh; }
+    .sidebar { 
+      background: #f8f9fa;
+      height: 100vh;
+      overflow-y: auto;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+    }
+    .criteria-card { 
+      border-left: 4px solid #28a745;
+      margin-bottom: 15px;
+      transition: all 0.3s;
+    }
+    .criteria-card:hover { transform: translateY(-3px); }
+    .photo-preview { max-height: 100px; cursor: pointer; }
+    .score-badge { font-size: 0.8rem; }
+    #legend { 
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .leaflet-control-layers { overflow-y: auto; max-height: 300px; }
+    .grade-A { background-color: #28a745 !important; }
+    .grade-B { background-color: #17a2b8 !important; }
+    .grade-C { background-color: #ffc107 !important; }
+    .grade-D { background-color: #fd7e14 !important; }
+    .grade-E { background-color: #dc3545 !important; }
+    .loading-spinner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+    }
+    .loading-spinner.active {
+      display: flex;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Spinner -->
+  <div class="loading-spinner" id="loadingSpinner">
+    <div class="spinner-border text-light" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Map Column -->
+      <div class="col-md-8 p-0">
+        <div id="map"></div>
+        <div id="legend" class="position-absolute bottom-0 end-0 m-3">
+          <h6><i class="fas fa-map-legend"></i> Legenda</h6>
+          <div><i class="fas fa-square text-success"></i> Jalur Baik (Skor 4-5)</div>
+          <div><i class="fas fa-square text-warning"></i> Jalur Sedang (Skor 3)</div>
+          <div><i class="fas fa-square text-danger"></i> Jalur Buruk (Skor 1-2)</div>
+        </div>
+      </div>
+      
+      <!-- Form Column -->
+      <div class="col-md-4 sidebar p-3">
+        <h3 class="text-center mb-4">
+          <i class="fas fa-tree"></i> PENILAIAN LAND CLEARING
+        </h3>
+        
+        <!-- Project Info -->
+        <div class="card mb-3">
+          <div class="card-header bg-primary text-white">
+            <i class="fas fa-info-circle"></i> Informasi Proyek
+          </div>
+          <div class="card-body">
+            <div class="mb-2">
+              <label class="form-label">Nama Proyek <span class="text-danger">*</span></label>
+              <input type="text" id="projectName" class="form-control" required>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-2">
+                <label class="form-label">Tanggal <span class="text-danger">*</span></label>
+                <input type="date" id="assessmentDate" class="form-control" required>
+              </div>
+              <div class="col-md-6 mb-2">
+                <label class="form-label">Jalur Sampel <span class="text-danger">*</span></label>
+                <select id="sampleLine" class="form-select" required>
+                  <option value="">Pilih Jalur</option>
+                  <!-- Options will be populated by JS -->
+                </select>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Koordinat <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <input type="text" id="latitude" class="form-control" placeholder="Lintang" readonly required>
+                <input type="text" id="longitude" class="form-control" placeholder="Bujur" readonly required>
+                <button class="btn btn-outline-secondary" type="button" onclick="getLocation()">
+                  <i class="fas fa-location-crosshairs"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assessment Form -->
+        <div class="card mb-3">
+          <div class="card-header bg-primary text-white">
+            <i class="fas fa-clipboard-check"></i> Form Penilaian
+          </div>
+          <div class="card-body" id="criteria-section">
+            <!-- Criteria will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Photo Upload -->
+        <div class="card mb-3">
+          <div class="card-header bg-primary text-white">
+            <i class="fas fa-camera"></i> Dokumentasi
+          </div>
+          <div class="card-body">
+            <input type="file" id="photoUpload" accept="image/*" class="form-control mb-2" multiple>
+            <div id="photoPreview" class="d-flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button id="submitBtn" class="btn btn-success w-100 py-2" onclick="saveAssessment()">
+          <i class="fas fa-save"></i> SIMPAN PENILAIAN
+        </button>
+
+        <!-- Results Summary -->
+        <div class="card mt-3 d-none" id="resultsCard">
+          <div class="card-header bg-info text-white">
+            <i class="fas fa-chart-bar"></i> Hasil
+          </div>
+          <div class="card-body">
+            <div id="scoreSummary"></div>
+            <canvas id="scoreChart" width="100%" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  
+  <script>
+    // Global Variables
+    let map;
+    let drawnItems = new L.FeatureGroup();
+    let assessmentData = {};
+    let currentLine = null;
+    const criteria = [
+      {
+        id: "trench_straightness",
+        name: "Kelurusan Parit",
+        levels: [
+          { score: 5, desc: "Lurus sempurna (deviasi <2cm)" },
+          { score: 4, desc: "Hampir lurus (deviasi 2-5cm)" },
+          { score: 3, desc: "Sedang (deviasi 5-10cm)" },
+          { score: 2, desc: "Tidak lurus (deviasi 10-20cm)" },
+          { score: 1, desc: "Berkelok-kelok (deviasi >20cm)" }
+        ],
+        tool: "Tali/Total Station"
+      },
+      {
+        id: "trench_depth",
+        name: "Kedalaman Parit",
+        levels: [
+          { score: 5, desc: "Kedalaman tepat (60±2cm)" },
+          { score: 4, desc: "Kedalaman hampir tepat (60±5cm)" },
+          { score: 3, desc: "Kedalaman sedang (60±10cm)" },
+          { score: 2, desc: "Kedalaman tidak tepat (60±15cm)" },
+          { score: 1, desc: "Kedalaman sangat tidak tepat (>60±15cm)" }
+        ],
+        tool: "Meteran"
+      },
+      {
+        id: "trench_width",
+        name: "Lebar Parit",
+        levels: [
+          { score: 5, desc: "Lebar tepat (40±2cm)" },
+          { score: 4, desc: "Lebar hampir tepat (40±5cm)" },
+          { score: 3, desc: "Lebar sedang (40±10cm)" },
+          { score: 2, desc: "Lebar tidak tepat (40±15cm)" },
+          { score: 1, desc: "Lebar sangat tidak tepat (>40±15cm)" }
+        ],
+        tool: "Meteran"
+      },
+      {
+        id: "soil_compaction",
+        name: "Pemadatan Tanah",
+        levels: [
+          { score: 5, desc: "Pemadatan sempurna (tidak ada rongga)" },
+          { score: 4, desc: "Pemadatan baik (sedikit rongga)" },
+          { score: 3, desc: "Pemadatan cukup (beberapa rongga)" },
+          { score: 2, desc: "Pemadatan kurang (banyak rongga kecil)" },
+          { score: 1, desc: "Pemadatan buruk (rongga besar)" }
+        ],
+        tool: "Visual/Water Test"
+      },
+      {
+        id: "cleaning_quality",
+        name: "Kebersihan Area",
+        levels: [
+          { score: 5, desc: "Bersih sempurna (tidak ada sampah/sisa tebangan)" },
+          { score: 4, desc: "Bersih (sedikit sampah/sisa tebangan)" },
+          { score: 3, desc: "Cukup bersih (beberapa sampah/sisa tebangan)" },
+          { score: 2, desc: "Kurang bersih (banyak sampah/sisa tebangan)" },
+          { score: 1, desc: "Kotor (sampah/sisa tebangan berserakan)" }
+        ],
+        tool: "Visual"
+      },
+      {
+        id: "slope_consistency",
+        name: "Konsistensi Kemiringan",
+        levels: [
+          { score: 5, desc: "Kemiringan konsisten (2% ±0.5%)" },
+          { score: 4, desc: "Kemiringan hampir konsisten (2% ±1%)" },
+          { score: 3, desc: "Kemiringan cukup konsisten (2% ±2%)" },
+          { score: 2, desc: "Kemiringan tidak konsisten (2% ±3%)" },
+          { score: 1, desc: "Kemiringan sangat tidak konsisten (>2% ±3%)" }
+        ],
+        tool: "Waterpass/Total Station"
+      },
+      {
+        id: "obstacle_handling",
+        name: "Penanganan Hambatan",
+        levels: [
+          { score: 5, desc: "Penanganan sempurna (solusi tepat untuk semua hambatan)" },
+          { score: 4, desc: "Penanganan baik (solusi tepat untuk sebagian besar hambatan)" },
+          { score: 3, desc: "Penanganan cukup (solusi cukup untuk hambatan)" },
+          { score: 2, desc: "Penanganan minimal (solusi dasar untuk hambatan)" },
+          { score: 1, desc: "Penanganan buruk (mengabaikan hambatan)" }
+        ],
+        tool: "Visual"
+      }
+    ];
+
+    // Initialize Map
+    function initMap() {
+      map = L.map('map').setView([-2.5489, 118.0149], 15);
+      
+      // Basemaps
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      });
+      
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri'
+      });
+      
+      osm.addTo(map);
+      
+      // Layer control
+      const baseLayers = {
+        "Peta Standar": osm,
+        "Satelit": satellite
+      };
+      
+      L.control.layers(baseLayers).addTo(map);
+      
+      // Add drawing tools
+      const drawControl = new L.Control.Draw({
+        edit: { featureGroup: drawnItems },
+        draw: {
+          polygon: false,
+          circle: false,
+          marker: true,
+          circlemarker: false,
+          polyline: true,
+          rectangle: false
+        }
+      });
+      map.addControl(drawControl);
+      
+      map.on(L.Draw.Event.CREATED, function(e) {
+        const layer = e.layer;
+        drawnItems.addLayer(layer);
+        if (layer instanceof L.Marker) {
+          const latlng = layer.getLatLng();
+          document.getElementById('latitude').value = latlng.lat.toFixed(6);
+          document.getElementById('longitude').value = latlng.lng.toFixed(6);
+        }
+      });
+    }
+
+    // Load SHP Data (GeoJSON)
+    function loadGeoJSON(url) {
+      showLoading();
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Gagal memuat data GeoJSON');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const lines = L.geoJSON(data, {
+            style: function(feature) {
+              const score = assessmentData[feature.properties.id]?.totalScore || 0;
+              return {
+                color: getColorForScore(score),
+                weight: 4,
+                opacity: 0.8
+              };
+            },
+            onEachFeature: function(feature, layer) {
+              layer.bindPopup(`
+                <b>Jalur ${feature.properties.id}</b><br>
+                ${getAssessmentSummary(feature.properties.id)}
+              `);
+              layer.on('click', function() {
+                document.getElementById('sampleLine').value = feature.properties.id;
+                loadLineAssessment(feature.properties.id);
+              });
+            }
+          }).addTo(map);
+          
+          // Fit bounds
+          map.fitBounds(lines.getBounds());
+          
+          // Populate sample lines dropdown
+          const select = document.getElementById('sampleLine');
+          data.features.forEach(feature => {
+            const option = document.createElement('option');
+            option.value = feature.properties.id;
+            option.textContent = `Jalur ${feature.properties.id}`;
+            select.appendChild(option);
+          });
+          
+          // Load existing assessments
+          loadExistingAssessments();
+        })
+        .catch(error => {
+          console.error('Error loading GeoJSON:', error);
+          loadSampleLines();
+        })
+        .finally(() => {
+          hideLoading();
+        });
+    }
+
+    // Fallback jika GeoJSON tidak tersedia
+    function loadSampleLines() {
+      const select = document.getElementById('sampleLine');
+      for (let i = 1; i <= 32; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Jalur ${i}`;
+        select.appendChild(option);
+      }
+    }
+
+    // Load existing assessments from server
+    function loadExistingAssessments() {
+      showLoading();
+      fetch('get_assessments.php')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Gagal memuat data penilaian');
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.success && data.data) {
+            assessmentData = data.data.reduce((acc, assessment) => {
+              acc[assessment.line_number] = {
+                ...assessment,
+                scores: JSON.parse(assessment.scores),
+                photos: JSON.parse(assessment.photos),
+                totalScore: assessment.total_score,
+                grade: assessment.grade
+              };
+              return acc;
+            }, {});
+            
+            // Update map with assessment data
+            updateMapWithAssessments();
+          }
+        })
+        .catch(error => {
+          console.error('Error loading assessments:', error);
+        })
+        .finally(() => {
+          hideLoading();
+        });
+    }
+
+    function updateMapWithAssessments() {
+      // Implement this if you want to update map features based on saved assessments
+    }
+
+    function getColorForScore(score) {
+      if (score >= 4) return '#28a745'; // Green
+      if (score >= 3) return '#ffc107'; // Yellow
+      return '#dc3545'; // Red
+    }
+
+    function getAssessmentSummary(lineId) {
+      const data = assessmentData[lineId];
+      if (!data) return "Belum dinilai";
+      
+      return `
+        Total Skor: ${data.totalScore}/35<br>
+        Grade: ${data.grade}<br>
+        Terakhir dinilai: ${new Date(data.created_at).toLocaleDateString()}
+      `;
+    }
+
+    // Generate Assessment Form
+    function generateCriteriaForm() {
+      const container = document.getElementById('criteria-section');
+      container.innerHTML = '';
+      
+      criteria.forEach(criterion => {
+        const card = document.createElement('div');
+        card.className = 'card criteria-card mb-3';
+        card.innerHTML = `
+          <div class="card-body">
+            <h6 class="card-title d-flex justify-content-between">
+              <span>${criterion.name}</span>
+              <span class="badge bg-secondary score-badge d-none" id="badge-${criterion.id}">0</span>
+            </h6>
+            <select class="form-select criterion-select" data-criterion="${criterion.id}" required>
+              <option value="">Pilih Skor</option>
+              ${criterion.levels.map(level => `
+                <option value="${level.score}">${level.score}: ${level.desc}</option>
+              `).join('')}
+            </select>
+            <small class="text-muted"><i class="fas fa-ruler"></i> Alat: ${criterion.tool}</small>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+      
+      // Add event listeners
+      document.querySelectorAll('.criterion-select').forEach(select => {
+        select.addEventListener('change', function() {
+          const criterionId = this.dataset.criterion;
+          const badge = document.getElementById(`badge-${criterionId}`);
+          badge.textContent = this.value;
+          badge.classList.toggle('d-none', !this.value);
+          badge.className = `badge score-badge ${getBadgeClass(this.value)}`;
+        });
+      });
+    }
+
+    function getBadgeClass(score) {
+      score = parseInt(score);
+      if (score >= 4) return 'bg-success';
+      if (score >= 3) return 'bg-warning';
+      if (score) return 'bg-danger';
+      return 'bg-secondary';
+    }
+
+    // Load assessment for specific line
+    function loadLineAssessment(lineId) {
+      currentLine = lineId;
+      const data = assessmentData[lineId] || {};
+      
+      criteria.forEach(criterion => {
+        const select = document.querySelector(`select[data-criterion="${criterion.id}"]`);
+        if (select) {
+          select.value = data.scores?.[criterion.id] || '';
+          // Trigger change event to update badges
+          const event = new Event('change');
+          select.dispatchEvent(event);
+        }
+      });
+      
+      // Update photo preview
+      updatePhotoPreview(data.photos || []);
+      
+      // Update other fields
+      if (data.project_name) document.getElementById('projectName').value = data.project_name;
+      if (data.assessment_date) document.getElementById('assessmentDate').value = data.assessment_date;
+      if (data.latitude) document.getElementById('latitude').value = data.latitude;
+      if (data.longitude) document.getElementById('longitude').value = data.longitude;
+      
+      // Show results card if data exists
+      if (data.scores) {
+        updateResultsSummary({
+          line: lineId,
+          project: data.project_name,
+          date: data.assessment_date,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          photos: data.photos || [],
+          scores: data.scores,
+          totalScore: data.totalScore,
+          grade: data.grade,
+          timestamp: data.created_at
+        });
+      } else {
+        document.getElementById('resultsCard').classList.add('d-none');
+      }
+    }
+
+    // Handle photo upload
+    document.getElementById('photoUpload').addEventListener('change', function(e) {
+      const files = e.target.files;
+      const preview = document.getElementById('photoPreview');
+      preview.innerHTML = '';
+      
+      Array.from(files).forEach(file => {
+        if (!file.type.match('image.*')) {
+          alert(`File ${file.name} bukan gambar. Hanya file gambar yang diizinkan.`);
+          return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+          alert(`File ${file.name} terlalu besar. Maksimal 5MB.`);
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = document.createElement('img');
+          img.src = event.target.result;
+          img.className = 'photo-preview img-thumbnail';
+          img.title = file.name;
+          preview.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    function updatePhotoPreview(photos) {
+      const preview = document.getElementById('photoPreview');
+      preview.innerHTML = '';
+      
+      photos.forEach(photo => {
+        if (photo.startsWith('data:image')) {
+          const img = document.createElement('img');
+          img.src = photo;
+          img.className = 'photo-preview img-thumbnail';
+          preview.appendChild(img);
+        }
+      });
+    }
+
+    // Get current location
+    function getLocation() {
+      if (navigator.geolocation) {
+        document.getElementById('latitude').value = 'Mengambil lokasi...';
+        document.getElementById('longitude').value = 'Mengambil lokasi...';
+        
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
+            
+            // Add marker to map
+            drawnItems.clear();
+            const marker = L.marker([lat, lng]).addTo(drawnItems);
+            map.addLayer(drawnItems);
+            map.setView([lat, lng], 18);
+          },
+          error => {
+            alert('Error mendapatkan lokasi: ' + error.message);
+            document.getElementById('latitude').value = '';
+            document.getElementById('longitude').value = '';
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      } else {
+        alert('Geolocation tidak didukung oleh browser ini.');
+      }
+    }
+
+    // Validate form before saving
+    function validateForm() {
+      const requiredFields = [
+        {id: 'projectName', name: 'Nama Proyek'},
+        {id: 'assessmentDate', name: 'Tanggal'},
+        {id: 'sampleLine', name: 'Jalur Sampel'},
+        {id: 'latitude', name: 'Latitude'},
+        {id: 'longitude', name: 'Longitude'}
+      ];
+      
+      for (const field of requiredFields) {
+        const element = document.getElementById(field.id);
+        if (!element.value.trim()) {
+          showErrorAlert(`Field ${field.name} harus diisi`);
+          element.focus();
+          return false;
+        }
+      }
+      
+      // Check if at least one score is selected
+      let hasScore = false;
+      document.querySelectorAll('.criterion-select').forEach(select => {
+        if (select.value) hasScore = true;
+      });
+      
+      if (!hasScore) {
+        showErrorAlert('Pilih setidaknya satu skor penilaian');
+        return false;
+      }
+      
+      return true;
+    }
+
+    // Save assessment
+async function saveAssessment() {
+    if (!validateForm()) return;
+    
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+    showLoading();
+
+    try {
+        // 1. Konversi foto ke base64
+        const photoPromises = Array.from(document.getElementById('photoUpload').files).map(file => {
+            return new Promise((resolve, reject) => {
+                if (file.size > 5 * 1024 * 1024) {
+                    reject(new Error(`File ${file.name} terlalu besar (maks 5MB)`));
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = () => reject(new Error(`Gagal membaca file ${file.name}`));
+                reader.readAsDataURL(file);
+            });
+        });
+
+        const photos = await Promise.all(photoPromises);
+
+        // 2. Siapkan data assessment
+        const assessment = {
+            project: document.getElementById('projectName').value.trim(),
+            date: document.getElementById('assessmentDate').value,
+            line: document.getElementById('sampleLine').value,
+            latitude: parseFloat(document.getElementById('latitude').value),
+            longitude: parseFloat(document.getElementById('longitude').value),
+            photos: photos,
+            scores: {},
+            totalScore: 0,
+            grade: ''
+        };
+        
+        // 3. Hitung scores
+        let totalScore = 0;
+        criteria.forEach(criterion => {
+            const select = document.querySelector(`select[data-criterion="${criterion.id}"]`);
+            const score = select ? parseInt(select.value) || 0 : 0;
+            assessment.scores[criterion.id] = score;
+            totalScore += score;
+        });
+        
+        assessment.totalScore = totalScore;
+        assessment.grade = calculateGrade(totalScore);
+
+        // 4. Kirim ke server dengan timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik timeout
+        
+        const response = await fetch('save_assessment.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(assessment),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+
+        // 5. Handle response
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = 'Gagal menyimpan data';
+            
+            try {
+                // Coba parse sebagai JSON
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.message || errorMessage;
+            } catch {
+                // Jika bukan JSON, tampilkan sebagian teks error
+                errorMessage = `Server error: ${errorText.substring(0, 200)}`;
+            }
+            
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.message || 'Gagal menyimpan data');
+        }
+        
+        // 6. Update UI jika sukses
+        assessmentData[currentLine] = assessment;
+        updateResultsSummary(assessment);
+        showSuccessAlert(`Penilaian untuk Jalur ${assessment.line} berhasil disimpan! ID: ${data.data.id}`);
+        
+        // Reset form
+        document.getElementById('photoUpload').value = '';
+
+    } catch (error) {
+        console.error('Save error:', error);
+        
+        let errorMessage = error.message;
+        
+        // Handle khusus untuk timeout
+        if (error.name === 'AbortError') {
+            errorMessage = 'Waktu penyimpanan habis. Silakan coba lagi.';
+        }
+        
+        // Handle error jaringan
+        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+            errorMessage = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+        }
+        
+        showErrorAlert(errorMessage);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> SIMPAN PENILAIAN';
+        hideLoading();
+    }
+}
+
+    function showLoading() {
+      document.getElementById('loadingSpinner').classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingSpinner').classList.remove('active');
+    }
+
+    function showSuccessAlert(message) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
+      alertDiv.style.zIndex = '9999';
+      alertDiv.role = 'alert';
+      alertDiv.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      document.body.appendChild(alertDiv);
+      
+      // Auto dismiss after 5 seconds
+      setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alertDiv);
+        bsAlert.close();
+      }, 5000);
+    }
+
+    function showErrorAlert(message) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 end-0 m-3';
+      alertDiv.style.zIndex = '9999';
+      alertDiv.role = 'alert';
+      alertDiv.innerHTML = `
+        <i class="fas fa-exclamation-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      document.body.appendChild(alertDiv);
+      
+      // Auto dismiss after 5 seconds
+      setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alertDiv);
+        bsAlert.close();
+      }, 5000);
+    }
+
+    function calculateGrade(totalScore) {
+      const percentage = (totalScore / 35) * 100;
+      if (percentage >= 90) return 'A';
+      if (percentage >= 80) return 'B';
+      if (percentage >= 70) return 'C';
+      if (percentage >= 60) return 'D';
+      return 'E';
+    }
+
+    function updateResultsSummary(assessment) {
+      const card = document.getElementById('resultsCard');
+      card.classList.remove('d-none');
+      
+      document.getElementById('scoreSummary').innerHTML = `
+        <h5>Jalur ${assessment.line}</h5>
+        <p>Proyek: <strong>${assessment.project}</strong></p>
+        <p>Tanggal: <strong>${new Date(assessment.date).toLocaleDateString()}</strong></p>
+        <p>Total Skor: <strong>${assessment.totalScore}/35</strong></p>
+        <p>Grade: <span class="badge grade-${assessment.grade}">${assessment.grade}</span></p>
+        <hr>
+        <h6>Detail Skor:</h6>
+        <ul class="list-group">
+          ${criteria.map(criterion => {
+            const score = assessment.scores[criterion.id] || 0;
+            return `<li class="list-group-item d-flex justify-content-between align-items-center">
+              ${criterion.name}
+              <span class="badge ${getBadgeClass(score)}">${score}</span>
+            </li>`;
+          }).join('')}
+        </ul>
+      `;
+      
+      // Update chart
+      updateScoreChart(assessment);
+    }
+
+    function updateScoreChart(assessment) {
+      const ctx = document.getElementById('scoreChart').getContext('2d');
+      
+      // Destroy previous chart if exists
+      if (window.assessmentChart) {
+        window.assessmentChart.destroy();
+      }
+      
+      const labels = criteria.map(c => c.name);
+      const data = criteria.map(c => assessment.scores[c.id] || 0);
+      const backgroundColors = criteria.map(c => {
+        const score = assessment.scores[c.id] || 0;
+        if (score >= 4) return 'rgba(40, 167, 69, 0.2)';
+        if (score >= 3) return 'rgba(255, 193, 7, 0.2)';
+        return 'rgba(220, 53, 69, 0.2)';
+      });
+      const borderColors = criteria.map(c => {
+        const score = assessment.scores[c.id] || 0;
+        if (score >= 4) return 'rgba(40, 167, 69, 1)';
+        if (score >= 3) return 'rgba(255, 193, 7, 1)';
+        return 'rgba(220, 53, 69, 1)';
+      });
+      
+      window.assessmentChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Skor Penilaian',
+            data: data,
+            backgroundColor: backgroundColors,
+            borderColor: borderColors,
+            pointBackgroundColor: borderColors,
+            borderWidth: 2,
+            pointBorderColor: '#fff',
+            pointHoverRadius: 5
+          }]
+        },
+        options: {
+          scales: {
+            r: {
+              angleLines: { display: true },
+              suggestedMin: 0,
+              suggestedMax: 5,
+              ticks: { stepSize: 1 }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const criterion = criteria.find(c => c.name === context.label);
+                  const score = context.raw;
+                  const level = criterion?.levels.find(l => l.score === score);
+                  return `${context.label}: ${score} (${level?.desc || ''})`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Initialize app
+    window.onload = function() {
+      initMap();
+      generateCriteriaForm();
+      
+      // Load sample GeoJSON data
+      loadGeoJSON('sample-lines.geojson'); // Replace with your actual GeoJSON file
+      
+      // Set default date
+      document.getElementById('assessmentDate').valueAsDate = new Date();
+    };
+  </script>
+</body>
+</html>
