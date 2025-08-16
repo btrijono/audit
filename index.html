@@ -287,10 +287,10 @@
       const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri'
       });
-	   const GoogleSattelite : L.tileLayer('https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga', {
+	   const Google : L.tileLayer('https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga', {
       attribution: '&copy; OpenStreetMap contributors'
     });
-     const GoogleHybrid : L.tileLayer('https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+     const Hybrid : L.tileLayer('https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
      attribution: '&copy; OpenStreetMap contributors'
     });
         // Tambahkan layer foto udara tile (contoh format)
@@ -314,8 +314,8 @@
       const baseLayers = {
         "Peta Standar": osm,
         "Satelit": satellite,
-		"Google Hybrid": GoogleHybrid,
-		 "Google Satellite": GoogleSattelite
+		"Google Hybrid": Google,
+		 "Google Satellite": Hybrid
       };
 	    const overlays = {
     "Foto Udara": aerialPhoto, // Dari contoh sebelumnya
