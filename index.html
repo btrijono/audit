@@ -273,6 +273,7 @@
         tool: "Visual"
       }
     ];
+// Di awal script, sebelum initMap()
 
     // Initialize Map
     function initMap() {
@@ -286,7 +287,21 @@
       const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri'
       });
-      
+        // Tambahkan layer foto udara tile (contoh format)
+  const aerialPhoto = L.tileLayer('http://gis.julongindonesia.com:8087/jlg2025/{z}/{x}/{y}.png', {
+    attribution: 'Foto Udara © GIS DEPARTMENT',
+    minZoom: 10,
+    maxZoom: 24,
+    bounds: [[3.60, 117.50], [3.80, 117.70]] // Sesuaikan dengan area coverage foto
+  });
+        // Tambahkan layer foto udara tile (contoh format)
+  const aerialPhoto072025 = L.tileLayer('http://gis.julongindonesia.com:8087/jlgmau2025/{z}/{x}/{y}.png', {
+    attribution: 'Foto Udara © GIS DEPARTMENT',
+    minZoom: 10,
+    maxZoom: 24,
+    bounds: [[3.60, 117.50], [3.80, 117.70]] // Sesuaikan dengan area coverage foto
+  });
+
       osm.addTo(map);
       
       // Layer control
@@ -294,8 +309,12 @@
         "Peta Standar": osm,
         "Satelit": satellite
       };
+	    const overlays = {
+    "Foto Udara": aerialPhoto, // Dari contoh sebelumnya
+    "Foto Udara 07/2025": aerialPhoto072025 // Layer WMS baru
+  };
       
-      L.control.layers(baseLayers).addTo(map);
+       L.control.layers(baseLayers, overlays).addTo(map);
       
       // Add drawing tools
       const drawControl = new L.Control.Draw({
